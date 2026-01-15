@@ -38,12 +38,10 @@
     {{- tools_definition }}
 {%- endif %}
 
-{#- REMOVED: The block that checked for alternating roles was deleted here. -#}
-
 {#- Handle conversation messages. #}
 {%- for message in loop_messages %}
 
-    {#- User messages supports text content or text and image chunks. #}
+    {#- User messages supports text, image, image_url, and tool_result chunks. #}
     {%- if message['role'] == 'user' %}
         {%- if message['content'] is string %}
             {{- '[INST]' + message['content'] + '[/INST]' }}
@@ -63,8 +61,11 @@
                     {{- block['text'] }}
                 {%- elif block['type'] in ['image', 'image_url'] %}
                     {{- '[IMG]' }}
+                {#- Handle Anthropic-style tool_result blocks embedded in user messages -#}
+                {%- elif block['type'] == 'tool_result' %}
+                    {{- '[TOOL_RESULTS]' + block['content']|string + '[/TOOL_RESULTS]' }}
                 {%- else %}
-                    {{- raise_exception('Only text, image and image_url chunks are supported in user message content.') }}
+                    {{- raise_exception('Unsupported content type in user message: ' + block['type']) }}
                 {%- endif %}
             {%- endfor %}
             {{- '[/INST]' }}
@@ -84,6 +85,15 @@
             {%- for block in message['content'] %}
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
+                {#- Handle Anthropic-style tool_use blocks in assistant messages -#}
+                {%- elif block['type'] == 'tool_use' %}
+                    {%- set arguments = block['input'] %}
+                    {%- if arguments is not string %}
+                        {%- set arguments = arguments|tojson %}
+                    {%- elif arguments == '' %}
+                        {%- set arguments = '{}' %}
+                    {%- endif %}
+                    {{- '[TOOL_CALLS]' + block['name'] + '[ARGS]' + arguments }}
                 {%- else %}
                     {{- raise_exception('Only text chunks are supported in assistant message contents.') }}
                 {%- endif %}
